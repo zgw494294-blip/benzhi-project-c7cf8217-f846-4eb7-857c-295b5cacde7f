@@ -73,12 +73,12 @@ func requireVersion(volume *domain.DigitizationVolume, expected int64) error {
 	return nil
 }
 
-func (s *Service) audit(tx Transaction, volume *domain.DigitizationVolume, operation, actor string, details any) error {
+func (s *Service) audit(ctx context.Context, tx Transaction, volume *domain.DigitizationVolume, operation, actor string, details any) error {
 	raw, err := json.Marshal(details)
 	if err != nil {
 		return err
 	}
-	return tx.AppendAudit(context.Background(), AuditEvent{
+	return tx.AppendAudit(ctx, AuditEvent{
 		ID: s.id("evt"), VolumeID: volume.ID, Operation: operation,
 		Actor: strings.TrimSpace(actor), Version: volume.Version,
 		OccurredAt: s.now(), Details: raw,

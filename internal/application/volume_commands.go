@@ -37,7 +37,7 @@ func (s *Service) CreateVolume(ctx context.Context, key string, command CreateVo
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "volume.created", command.Actor, map[string]string{"title": volume.Title}); err != nil {
+		if err := s.audit(ctx, tx, volume, "volume.created", command.Actor, map[string]string{"title": volume.Title}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -69,7 +69,7 @@ func (s *Service) UpdateMetadata(ctx context.Context, key, volumeID string, comm
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "volume.metadata_updated", command.Actor, map[string]string{"title": volume.Title}); err != nil {
+		if err := s.audit(ctx, tx, volume, "volume.metadata_updated", command.Actor, map[string]string{"title": volume.Title}); err != nil {
 			return nil, err
 		}
 		return volume, nil

@@ -90,7 +90,7 @@ func (s *Service) RegisterPage(ctx context.Context, key, volumeID string, comman
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "page.registered", command.Actor, map[string]any{"pageID": page.ID, "folioLabel": page.FolioLabel, "sha256": sha}); err != nil {
+		if err := s.audit(ctx, tx, volume, "page.registered", command.Actor, map[string]any{"pageID": page.ID, "folioLabel": page.FolioLabel, "sha256": sha}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -127,7 +127,7 @@ func (s *Service) ReorderPages(ctx context.Context, key, volumeID string, comman
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "pages.reordered", command.Actor, map[string]any{"pageOrder": volume.PageOrder}); err != nil {
+		if err := s.audit(ctx, tx, volume, "pages.reordered", command.Actor, map[string]any{"pageOrder": volume.PageOrder}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -162,7 +162,7 @@ func (s *Service) UpdatePageMetadata(ctx context.Context, key, volumeID, pageID 
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "page.metadata_updated", command.Actor, map[string]string{"pageID": page.ID, "previousFolioLabel": previous, "folioLabel": page.FolioLabel}); err != nil {
+		if err := s.audit(ctx, tx, volume, "page.metadata_updated", command.Actor, map[string]string{"pageID": page.ID, "previousFolioLabel": previous, "folioLabel": page.FolioLabel}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -197,7 +197,7 @@ func (s *Service) ReviseTranscription(ctx context.Context, key, volumeID, pageID
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "page.transcription_revised", command.Actor, map[string]any{"pageID": page.ID, "revision": page.Revision}); err != nil {
+		if err := s.audit(ctx, tx, volume, "page.transcription_revised", command.Actor, map[string]any{"pageID": page.ID, "revision": page.Revision}); err != nil {
 			return nil, err
 		}
 		return volume, nil

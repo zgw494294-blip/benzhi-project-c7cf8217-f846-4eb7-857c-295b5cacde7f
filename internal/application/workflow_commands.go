@@ -54,7 +54,7 @@ func (s *Service) RunIntegrityCheck(ctx context.Context, key, volumeID string, c
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "integrity.completed", command.Actor, map[string]any{"checkID": run.ID, "status": status, "violations": len(violations)}); err != nil {
+		if err := s.audit(ctx, tx, volume, "integrity.completed", command.Actor, map[string]any{"checkID": run.ID, "status": status, "violations": len(violations)}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -85,7 +85,7 @@ func (s *Service) Freeze(ctx context.Context, key, volumeID string, command Vers
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "volume.frozen", command.Actor, map[string]string{"frozenDigest": digest}); err != nil {
+		if err := s.audit(ctx, tx, volume, "volume.frozen", command.Actor, map[string]string{"frozenDigest": digest}); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -128,7 +128,7 @@ func (s *Service) Accession(ctx context.Context, key, volumeID string, command A
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "manifest.issued", command.Reviewer, map[string]string{"manifestID": manifest.ID, "manifestNumber": manifest.ManifestNumber}); err != nil {
+		if err := s.audit(ctx, tx, volume, "manifest.issued", command.Reviewer, map[string]string{"manifestID": manifest.ID, "manifestNumber": manifest.ManifestNumber}); err != nil {
 			return nil, err
 		}
 		return volume, nil

@@ -52,7 +52,7 @@ func (s *Service) AddFinding(ctx context.Context, key, volumeID, pageID string, 
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "finding.added", command.Actor, finding); err != nil {
+		if err := s.audit(ctx, tx, volume, "finding.added", command.Actor, finding); err != nil {
 			return nil, err
 		}
 		return volume, nil
@@ -93,7 +93,7 @@ func (s *Service) ResolveFinding(ctx context.Context, key, volumeID, findingID s
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "finding.resolved", command.ResolvedBy, map[string]string{"findingID": finding.ID, "resolution": finding.Resolution}); err != nil {
+		if err := s.audit(ctx, tx, volume, "finding.resolved", command.ResolvedBy, map[string]string{"findingID": finding.ID, "resolution": finding.Resolution}); err != nil {
 			return nil, err
 		}
 		return volume, nil
