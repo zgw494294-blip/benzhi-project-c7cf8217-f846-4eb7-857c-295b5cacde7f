@@ -24,22 +24,21 @@ type SQLiteStore struct {
 }
 
 type cachedImage struct {
-	mu     sync.Mutex
-	data   []byte
-	offset int
-	media  string
+	data  []byte
+	media string
 }
 
-type cachedImageReader struct{ image *cachedImage }
+type cachedImageReader struct {
+	image  *cachedImage
+	offset int
+}
 
 func (r *cachedImageReader) Read(p []byte) (int, error) {
-	r.image.mu.Lock()
-	defer r.image.mu.Unlock()
-	if r.image.offset >= len(r.image.data) {
+	if r.offset >= len(r.image.data) {
 		return 0, io.EOF
 	}
-	n := copy(p, r.image.data[r.image.offset:])
-	r.image.offset += n
+	n := copy(p, r.image.data[r.offset:])
+	r.offset += n
 	return n, nil
 }
 
@@ -167,13 +166,8 @@ func (s *SQLiteStore) OpenImage(ctx context.Context, key string) (io.ReadCloser,
 	s.imageMu.Lock()
 	if s.imageKey == key && s.image != nil {
 		image := s.image
-		image.mu.Lock()
-		unread := image.offset < len(image.data)
-		image.mu.Unlock()
-		if unread {
-			s.imageMu.Unlock()
-			return &cachedImageReader{image: image}, image.media, int64(len(image.data)), nil
-		}
+		s.imageMu.Unlock()
+		return &cachedImageReader{image: image}, image.media, int64(len(image.data)), nil
 	}
 	s.imageMu.Unlock()
 
