@@ -53,9 +53,12 @@ func (s *Service) RegisterPage(ctx context.Context, key, volumeID string, comman
 	if command.ClaimedSHA256 != "" && !strings.EqualFold(command.ClaimedSHA256, sha) {
 		return nil, false, domain.NewRuleError(domain.CodeInvalid, "图像摘要与声明值不符")
 	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(command.Data))
+	config, format, err := image.DecodeConfig(bytes.NewReader(command.Data))
 	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 30000 || config.Height > 30000 {
 		return nil, false, domain.NewRuleError(domain.CodeInvalid, "图像格式无效或尺寸越界")
+	}
+	if detected, ok := mediaTypeForFormat(format); ok && detected != media {
+		media = detected
 	}
 	return runCommand(ctx, s, key, "page.register", volumeID, command, func(tx Transaction) (*domain.DigitizationVolume, error) {
 		volume, err := tx.GetVolume(ctx, volumeID)
@@ -202,4 +205,17 @@ func (s *Service) ReviseTranscription(ctx context.Context, key, volumeID, pageID
 		}
 		return volume, nil
 	})
+}
+
+func mediaTypeForFormat(format string) (string, bool) {
+	switch format {
+	case "png":
+		return "image/png", true
+	case "jpeg":
+		return "image/jpeg", true
+	case "gif":
+		return "image/gif", true
+	default:
+		return "", false
+	}
 }
