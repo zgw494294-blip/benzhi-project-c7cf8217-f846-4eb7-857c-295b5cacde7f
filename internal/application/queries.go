@@ -52,7 +52,7 @@ func (s *Service) GetWorkbench(ctx context.Context, volumeID string) (*Workbench
 	cached := s.workbenchCache[volumeID]
 	s.workbenchMu.RUnlock()
 	if cached != nil {
-		return cached, nil
+		return cloneWorkbenchView(cached), nil
 	}
 	volume, err := s.store.GetVolume(ctx, volumeID)
 	if err != nil {
@@ -73,15 +73,88 @@ func (s *Service) GetWorkbench(ctx context.Context, volumeID string) (*Workbench
 		view.ManifestDigest = domain.ManifestDigest(*volume.Manifest)
 	}
 	if volume.State == domain.StateAccessioned {
+		frozen := cloneWorkbenchView(view)
 		s.workbenchMu.Lock()
-		if cached := s.workbenchCache[volumeID]; cached != nil {
-			view = cached
+		if existing := s.workbenchCache[volumeID]; existing != nil {
+			view = cloneWorkbenchView(existing)
 		} else {
-			s.workbenchCache[volumeID] = view
+			s.workbenchCache[volumeID] = frozen
+			view = cloneWorkbenchView(frozen)
 		}
 		s.workbenchMu.Unlock()
 	}
 	return view, nil
+}
+
+func cloneWorkbenchView(src *WorkbenchView) *WorkbenchView {
+	if src == nil {
+		return nil
+	}
+	dst := WorkbenchView{ManifestDigest: src.ManifestDigest}
+	if src.ManifestValid != nil {
+		manifestValid := *src.ManifestValid
+		dst.ManifestValid = &manifestValid
+	}
+	if src.Volume != nil {
+		volume := *src.Volume
+		volume.PageOrder = append([]string(nil), src.Volume.PageOrder...)
+		if src.Volume.Pages != nil {
+			volume.Pages = make([]domain.FacsimilePage, len(src.Volume.Pages))
+			copy(volume.Pages, src.Volume.Pages)
+		}
+		if src.Volume.Findings != nil {
+			volume.Findings = make([]domain.CollationFinding, len(src.Volume.Findings))
+			copy(volume.Findings, src.Volume.Findings)
+			for index := range volume.Findings {
+				if src.Volume.Findings[index].ResolvedAt != nil {
+					resolvedAt := *src.Volume.Findings[index].ResolvedAt
+					volume.Findings[index].ResolvedAt = &resolvedAt
+				}
+			}
+		}
+		if src.Volume.Checks != nil {
+			volume.Checks = make([]domain.IntegrityCheckRun, len(src.Volume.Checks))
+			copy(volume.Checks, src.Volume.Checks)
+			for index := range volume.Checks {
+				if src.Volume.Checks[index].Violations != nil {
+					volume.Checks[index].Violations = make([]domain.IntegrityViolation, len(src.Volume.Checks[index].Violations))
+					copy(volume.Checks[index].Violations, src.Volume.Checks[index].Violations)
+				}
+			}
+		}
+		if src.Volume.Manifest != nil {
+			manifest := *src.Volume.Manifest
+			if src.Volume.Manifest.PageDigests != nil {
+				manifest.PageDigests = make([]domain.PageDigest, len(src.Volume.Manifest.PageDigests))
+				copy(manifest.PageDigests, src.Volume.Manifest.PageDigests)
+			}
+			volume.Manifest = &manifest
+		}
+		dst.Volume = &volume
+	}
+	if src.OrderedPages != nil {
+		dst.OrderedPages = make([]domain.FacsimilePage, len(src.OrderedPages))
+		copy(dst.OrderedPages, src.OrderedPages)
+	}
+	if src.OpenFindings != nil {
+		dst.OpenFindings = make([]domain.CollationFinding, len(src.OpenFindings))
+		copy(dst.OpenFindings, src.OpenFindings)
+		for index := range dst.OpenFindings {
+			if src.OpenFindings[index].ResolvedAt != nil {
+				resolvedAt := *src.OpenFindings[index].ResolvedAt
+				dst.OpenFindings[index].ResolvedAt = &resolvedAt
+			}
+		}
+	}
+	if src.LatestCheck != nil {
+		latest := *src.LatestCheck
+		if src.LatestCheck.Violations != nil {
+			latest.Violations = make([]domain.IntegrityViolation, len(src.LatestCheck.Violations))
+			copy(latest.Violations, src.LatestCheck.Violations)
+		}
+		dst.LatestCheck = &latest
+	}
+	return &dst
 }
 
 func (s *Service) ListAudit(ctx context.Context, volumeID string) ([]AuditEvent, error) {
