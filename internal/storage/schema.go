@@ -73,11 +73,10 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		return err
 	}
 	if version == 1 {
-		if _, err := s.db.ExecContext(ctx, `ALTER TABLE idempotency_results ADD COLUMN request_fingerprint TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("升级 schemaVersion 1: %w", err)
-		}
-		if _, err := s.db.ExecContext(ctx, `UPDATE schema_meta SET version = ?`, schemaVersion); err != nil {
-			return fmt.Errorf("记录 schemaVersion 2: %w", err)
+		// 将 schema 修改与版本元数据写入置于同一事务内，任一步失败都回滚，
+		// 避免残留新列而版本仍为 1，导致下次启动因重复添加列而迁移失败。
+		if err := s.upgradeToV2(ctx); err != nil {
+			return err
 		}
 		version = schemaVersion
 	}
@@ -85,6 +84,50 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		return fmt.Errorf("不支持的 schemaVersion：%d", version)
 	}
 	return nil
+}
+
+// upgradeToV2 原子地把 schema 版本 1 升级到版本 2。
+//
+// 使用单个事务包裹列添加（幂等）和版本元数据更新；任一步失败都会回滚，
+// 使数据库停留在可重试的原始状态。若升级因残留新列而以“duplicate column”
+// 失败（由此前崩溃的写入引起），则检测列已存在并跳过添加，仅推进版本，
+// 从而修复已损坏的库。
+func (s *SQLiteStore) upgradeToV2(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开始 schema 升级事务: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	columnExists, err := columnExists(ctx, tx, "idempotency_results", "request_fingerprint")
+	if err != nil {
+		return fmt.Errorf("升级 schemaVersion 1: %w", err)
+	}
+	if !columnExists {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE idempotency_results ADD COLUMN request_fingerprint TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("升级 schemaVersion 1: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schema_meta SET version = ?`, schemaVersion); err != nil {
+		return fmt.Errorf("记录 schemaVersion 2: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交 schema 升级事务: %w", err)
+	}
+	return nil
+}
+
+// columnExists 通过 pragma_table_info 检查指定表是否存在某列。
+func columnExists(ctx context.Context, q queryer, table, column string) (bool, error) {
+	rows, err := q.QueryContext(ctx, `SELECT 1 FROM pragma_table_info(?) WHERE name = ?`, table, column)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return true, nil
+	}
+	return false, rows.Err()
 }
 
 func (s *SQLiteStore) consistencyCheck(ctx context.Context) error {
