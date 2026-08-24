@@ -8,6 +8,22 @@ import (
 	"benzhi-project-c7cf8217-f846-4eb7-857c-295b5cacde7f/internal/domain"
 )
 
+const streamedImageThreshold int64 = 1 << 20
+
+type requestBoundImageReader struct {
+	context.Context
+	io.ReadCloser
+}
+
+func (r *requestBoundImageReader) Read(p []byte) (int, error) {
+	select {
+	case <-r.Done():
+		return 0, r.Err()
+	default:
+		return r.ReadCloser.Read(p)
+	}
+}
+
 type VolumeSummary struct {
 	ID           string             `json:"id"`
 	Title        string             `json:"title"`
@@ -81,7 +97,13 @@ func (s *Service) OpenPageImage(ctx context.Context, pageID string) (io.ReadClos
 	for _, volume := range volumes {
 		for _, page := range volume.Pages {
 			if page.ID == pageID {
-				return s.store.OpenImage(ctx, page.ImageObjectKey)
+				reader, media, size, err := s.store.OpenImage(ctx, page.ImageObjectKey)
+				if err != nil || size < streamedImageThreshold {
+					return reader, media, size, err
+				}
+				streamContext, cancel := context.WithCancel(ctx)
+				defer cancel()
+				return &requestBoundImageReader{Context: streamContext, ReadCloser: reader}, media, size, nil
 			}
 		}
 	}
