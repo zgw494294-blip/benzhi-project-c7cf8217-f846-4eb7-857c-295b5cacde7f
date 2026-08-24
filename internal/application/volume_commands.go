@@ -66,10 +66,13 @@ func (s *Service) UpdateMetadata(ctx context.Context, key, volumeID string, comm
 			return nil, err
 		}
 		bump(volume, s.now())
+		if err := s.stageMetadataAudit(volume, command.Actor); err != nil {
+			return nil, err
+		}
 		if err := tx.SaveVolume(ctx, volume); err != nil {
 			return nil, err
 		}
-		if err := s.audit(tx, volume, "volume.metadata_updated", command.Actor, map[string]string{"title": volume.Title}); err != nil {
+		if err := s.appendMetadataAudit(tx); err != nil {
 			return nil, err
 		}
 		return volume, nil

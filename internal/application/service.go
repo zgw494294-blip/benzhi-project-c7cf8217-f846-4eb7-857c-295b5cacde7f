@@ -14,9 +14,10 @@ import (
 )
 
 type Service struct {
-	store Store
-	now   func() time.Time
-	id    func(string) string
+	store         Store
+	now           func() time.Time
+	id            func(string) string
+	metadataAudit AuditEvent
 }
 
 func NewService(store Store) *Service {
@@ -83,6 +84,23 @@ func (s *Service) audit(tx Transaction, volume *domain.DigitizationVolume, opera
 		Actor: strings.TrimSpace(actor), Version: volume.Version,
 		OccurredAt: s.now(), Details: raw,
 	})
+}
+
+func (s *Service) stageMetadataAudit(volume *domain.DigitizationVolume, actor string) error {
+	raw, err := json.Marshal(map[string]string{"title": volume.Title})
+	if err != nil {
+		return err
+	}
+	s.metadataAudit = AuditEvent{
+		ID: s.id("evt"), VolumeID: volume.ID, Operation: "volume.metadata_updated",
+		Actor: strings.TrimSpace(actor), Version: volume.Version,
+		OccurredAt: s.now(), Details: raw,
+	}
+	return nil
+}
+
+func (s *Service) appendMetadataAudit(tx Transaction) error {
+	return tx.AppendAudit(context.Background(), s.metadataAudit)
 }
 
 func bump(volume *domain.DigitizationVolume, now time.Time) {
