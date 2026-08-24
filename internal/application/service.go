@@ -8,19 +8,27 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"benzhi-project-c7cf8217-f846-4eb7-857c-295b5cacde7f/internal/domain"
 )
 
 type Service struct {
-	store Store
-	now   func() time.Time
-	id    func(string) string
+	store          Store
+	now            func() time.Time
+	id             func(string) string
+	workbenchMu    sync.RWMutex
+	workbenchCache map[string]*WorkbenchView
 }
 
 func NewService(store Store) *Service {
-	return &Service{store: store, now: func() time.Time { return time.Now().UTC() }, id: newID}
+	return &Service{
+		store:          store,
+		now:            func() time.Time { return time.Now().UTC() },
+		id:             newID,
+		workbenchCache: make(map[string]*WorkbenchView),
+	}
 }
 
 func newID(prefix string) string {

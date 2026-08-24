@@ -48,6 +48,12 @@ func (s *Service) ListVolumes(ctx context.Context) ([]VolumeSummary, error) {
 }
 
 func (s *Service) GetWorkbench(ctx context.Context, volumeID string) (*WorkbenchView, error) {
+	s.workbenchMu.RLock()
+	cached := s.workbenchCache[volumeID]
+	s.workbenchMu.RUnlock()
+	if cached != nil {
+		return cached, nil
+	}
 	volume, err := s.store.GetVolume(ctx, volumeID)
 	if err != nil {
 		return nil, err
@@ -65,6 +71,15 @@ func (s *Service) GetWorkbench(ctx context.Context, volumeID string) (*Workbench
 		valid := domain.VerifyAccessionManifest(volume)
 		view.ManifestValid = &valid
 		view.ManifestDigest = domain.ManifestDigest(*volume.Manifest)
+	}
+	if volume.State == domain.StateAccessioned {
+		s.workbenchMu.Lock()
+		if cached := s.workbenchCache[volumeID]; cached != nil {
+			view = cached
+		} else {
+			s.workbenchCache[volumeID] = view
+		}
+		s.workbenchMu.Unlock()
 	}
 	return view, nil
 }
