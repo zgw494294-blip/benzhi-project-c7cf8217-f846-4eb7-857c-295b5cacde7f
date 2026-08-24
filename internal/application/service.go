@@ -8,19 +8,32 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"benzhi-project-c7cf8217-f846-4eb7-857c-295b5cacde7f/internal/domain"
 )
 
 type Service struct {
-	store Store
-	now   func() time.Time
-	id    func(string) string
+	store          Store
+	now            func() time.Time
+	id             func(string) string
+	commandMu      sync.Mutex
+	activeCommands map[string]*activeCommand
 }
 
 func NewService(store Store) *Service {
-	return &Service{store: store, now: func() time.Time { return time.Now().UTC() }, id: newID}
+	return &Service{
+		store: store, now: func() time.Time { return time.Now().UTC() }, id: newID,
+		activeCommands: make(map[string]*activeCommand),
+	}
+}
+
+type activeCommand struct {
+	done     chan struct{}
+	raw      json.RawMessage
+	replayed bool
+	err      error
 }
 
 func newID(prefix string) string {
@@ -46,7 +59,7 @@ func runCommand[T any](ctx context.Context, service *Service, key, operation, sc
 		return zero, false, fmt.Errorf("生成幂等请求指纹: %w", err)
 	}
 	fingerprint := domain.HashBytes(fingerprintSource)
-	raw, replayed, err := service.store.Execute(ctx, key, operation, fingerprint, func(tx Transaction) (json.RawMessage, error) {
+	raw, replayed, err := service.executeCommand(ctx, key, operation, fingerprint, func(tx Transaction) (json.RawMessage, error) {
 		result, commandErr := fn(tx)
 		if commandErr != nil {
 			return nil, commandErr
@@ -61,6 +74,31 @@ func runCommand[T any](ctx context.Context, service *Service, key, operation, sc
 		return zero, false, fmt.Errorf("读取幂等命令结果: %w", err)
 	}
 	return result, replayed, nil
+}
+
+func (s *Service) executeCommand(ctx context.Context, key, operation, fingerprint string, fn func(Transaction) (json.RawMessage, error)) (json.RawMessage, bool, error) {
+	commandKey := operation + "\x00" + key + "\x00" + fingerprint
+	s.commandMu.Lock()
+	if existing := s.activeCommands[commandKey]; existing != nil {
+		waitDone := ctx.Done()
+		s.commandMu.Unlock()
+		waitForActiveCommand(waitDone, existing.done)
+		return existing.raw, true, existing.err
+	}
+	call := &activeCommand{done: make(chan struct{})}
+	s.activeCommands[commandKey] = call
+	s.commandMu.Unlock()
+
+	call.raw, call.replayed, call.err = s.store.Execute(ctx, key, operation, fingerprint, fn)
+	close(call.done)
+	s.commandMu.Lock()
+	delete(s.activeCommands, commandKey)
+	s.commandMu.Unlock()
+	return call.raw, call.replayed, call.err
+}
+
+func waitForActiveCommand(_ <-chan struct{}, commandDone <-chan struct{}) {
+	<-commandDone
 }
 
 func requireVersion(volume *domain.DigitizationVolume, expected int64) error {
