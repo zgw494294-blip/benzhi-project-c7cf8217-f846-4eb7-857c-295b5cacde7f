@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"benzhi-project-c7cf8217-f846-4eb7-857c-295b5cacde7f/internal/application"
@@ -17,8 +17,33 @@ import (
 )
 
 type SQLiteStore struct {
-	db *sql.DB
+	db       *sql.DB
+	imageMu  sync.Mutex
+	imageKey string
+	image    *cachedImage
 }
+
+type cachedImage struct {
+	mu     sync.Mutex
+	data   []byte
+	offset int
+	media  string
+}
+
+type cachedImageReader struct{ image *cachedImage }
+
+func (r *cachedImageReader) Read(p []byte) (int, error) {
+	r.image.mu.Lock()
+	defer r.image.mu.Unlock()
+	if r.image.offset >= len(r.image.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.image.data[r.image.offset:])
+	r.image.offset += n
+	return n, nil
+}
+
+func (r *cachedImageReader) Close() error { return nil }
 
 func Open(dataSource string) (*SQLiteStore, error) {
 	if strings.TrimSpace(dataSource) == "" {
@@ -139,6 +164,19 @@ func (s *SQLiteStore) ListAudit(ctx context.Context, volumeID string) ([]applica
 }
 
 func (s *SQLiteStore) OpenImage(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
+	s.imageMu.Lock()
+	if s.imageKey == key && s.image != nil {
+		image := s.image
+		image.mu.Lock()
+		unread := image.offset < len(image.data)
+		image.mu.Unlock()
+		if unread {
+			s.imageMu.Unlock()
+			return &cachedImageReader{image: image}, image.media, int64(len(image.data)), nil
+		}
+	}
+	s.imageMu.Unlock()
+
 	var media string
 	var data []byte
 	err := s.db.QueryRowContext(ctx, `SELECT media_type, data FROM image_objects WHERE object_key = ?`, key).Scan(&media, &data)
@@ -151,7 +189,12 @@ func (s *SQLiteStore) OpenImage(ctx context.Context, key string) (io.ReadCloser,
 	if domain.HashBytes(data) != key {
 		return nil, "", 0, domain.NewRuleError(domain.CodeConflict, "图像对象摘要校验失败")
 	}
-	return io.NopCloser(bytes.NewReader(data)), media, int64(len(data)), nil
+	image := &cachedImage{data: data, media: media}
+	s.imageMu.Lock()
+	s.imageKey = key
+	s.image = image
+	s.imageMu.Unlock()
+	return &cachedImageReader{image: image}, media, int64(len(data)), nil
 }
 
 type queryer interface {
