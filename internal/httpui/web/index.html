@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>古籍数字校勘入藏台</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#workspace">跳到校勘区</a>
+  <div class="app-shell">
+    <header class="masthead">
+      <div class="brand-block">
+        <span class="seal" aria-hidden="true">校</span>
+        <div><h1>古籍数字校勘入藏台</h1><p>编页 · 转录 · 校核 · 入藏</p></div>
+      </div>
+      <div class="global-actions">
+        <span id="saveStatus" class="save-status" role="status">数据已同步</span>
+        <button id="auditButton" class="icon-button" type="button" title="查看审计轨迹" aria-label="查看审计轨迹"><img class="button-icon" src="/assets/icons/history.svg" alt=""></button>
+        <button id="newVolumeButton" class="primary-button" type="button"><img class="button-icon" src="/assets/icons/plus.svg" alt="">建卷</button>
+      </div>
+    </header>
+
+    <div class="workbench-frame">
+      <aside class="volume-rail" aria-label="数字化卷导航">
+        <div class="rail-heading"><h2>在校卷</h2><span id="volumeCount">0 卷</span></div>
+        <label class="search-box"><span class="sr-only">检索数字化卷</span><input id="volumeSearch" type="search" placeholder="题名或架藏号"></label>
+        <nav id="volumeList" class="volume-list" aria-live="polite"></nav>
+      </aside>
+
+      <main id="workspace" class="workspace" tabindex="-1">
+        <section id="emptyState" class="empty-state">
+          <span class="empty-mark" aria-hidden="true">卷</span>
+          <h2>尚未建立数字化卷</h2>
+          <p>从书目信息开始建立一条可追溯的校勘入藏流程。</p>
+          <button class="primary-button" type="button" data-action="new-volume">建立第一卷</button>
+        </section>
+
+        <div id="activeWorkspace" class="active-workspace" hidden>
+          <section class="volume-header">
+            <div class="volume-identity">
+              <div class="eyebrow"><span id="shelfMark"></span><span id="volumeVersion"></span></div>
+              <div class="title-line"><h2 id="volumeTitle"></h2><button id="editMetadataButton" class="icon-button compact" type="button" title="编辑书目信息" aria-label="编辑书目信息"><img class="button-icon" src="/assets/icons/pencil.svg" alt=""></button></div>
+              <p id="editionNote"></p>
+            </div>
+            <div class="workflow-status">
+              <span id="stateBadge" class="state-badge"></span>
+              <div id="workflowActions" class="workflow-actions"></div>
+            </div>
+          </section>
+
+          <section class="page-sequence" aria-labelledby="pageSequenceTitle">
+            <div class="section-heading">
+              <div><h3 id="pageSequenceTitle">扫描页序</h3><span id="pageCount">0 页</span></div>
+              <button id="uploadButton" class="secondary-button" type="button"><img class="button-icon" src="/assets/icons/plus.svg" alt="">上传扫描页</button>
+            </div>
+            <div id="pageStrip" class="page-strip" role="listbox" aria-label="扫描页"></div>
+          </section>
+
+          <section id="editorArea" class="editor-area">
+            <div class="image-pane">
+              <div class="pane-toolbar"><div><span class="pane-kicker">影像</span><strong id="activeFolio">未选页</strong><button id="editPageButton" class="pane-icon-button" type="button" title="编辑叶号" aria-label="编辑当前页叶号"><img class="button-icon" src="/assets/icons/pencil.svg" alt=""></button></div><span id="imageMeta"></span></div>
+              <div id="imageStage" class="image-stage"><p>选择扫描页后查看影像</p></div>
+            </div>
+            <div class="transcription-pane">
+              <div class="pane-toolbar"><div><span class="pane-kicker">转录</span><strong id="revisionLabel">修订 0</strong></div><button id="addFindingButton" class="secondary-button compact-text" type="button">登记疑难</button></div>
+              <label class="transcription-label"><span class="sr-only">本页转录文本</span><textarea id="transcriptionEditor" spellcheck="false" placeholder="在此逐字录入本页内容……"></textarea></label>
+              <div class="editor-footer"><span id="charCount">0 字</span><button id="saveTranscriptionButton" class="primary-button" type="button">保存转录</button></div>
+            </div>
+          </section>
+
+          <section class="review-band">
+            <div class="finding-panel">
+              <div class="section-heading"><div><h3>疑难队列</h3><span id="findingCount">0 项未决</span></div></div>
+              <div id="findingList" class="finding-list"></div>
+            </div>
+            <div class="check-panel">
+              <div class="section-heading"><div><h3>完整性检查</h3><span id="checkSummary">尚未检查</span></div></div>
+              <div id="checkContent" class="check-content"></div>
+            </div>
+          </section>
+
+          <section id="manifestBand" class="manifest-band" hidden>
+            <div><span class="pane-kicker">入藏清单</span><h3 id="manifestNumber"></h3><p id="manifestMeta"></p></div>
+            <div class="digest-block"><div><span>冻结摘要</span><code id="manifestDigest"></code></div><div><span>清单指纹</span><code id="manifestFingerprint"></code></div></div>
+            <span id="manifestValidity" class="validity"></span>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="formDialog" class="form-dialog">
+    <form id="dialogForm" method="dialog">
+      <div class="dialog-heading"><div><span id="dialogKicker" class="pane-kicker"></span><h2 id="dialogTitle"></h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="关闭"><img class="button-icon" src="/assets/icons/x.svg" alt=""></button></div>
+      <div id="dialogFields" class="dialog-fields"></div>
+      <p id="dialogError" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" formmethod="dialog">取消</button><button id="dialogSubmit" class="primary-button" value="default">确认</button></div>
+    </form>
+  </dialog>
+
+  <aside id="auditDrawer" class="audit-drawer" aria-labelledby="auditTitle" aria-hidden="true">
+    <div class="drawer-heading"><div><span class="pane-kicker">只追加记录</span><h2 id="auditTitle">审计轨迹</h2></div><button id="closeAuditButton" class="icon-button" type="button" aria-label="关闭审计轨迹"><img class="button-icon" src="/assets/icons/x.svg" alt=""></button></div>
+    <ol id="auditList" class="audit-list"></ol>
+  </aside>
+  <div id="drawerScrim" class="drawer-scrim" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
