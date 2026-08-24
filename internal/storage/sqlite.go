@@ -89,6 +89,10 @@ func (s *SQLiteStore) GetVolume(ctx context.Context, id string) (*domain.Digitiz
 	return loadVolume(ctx, s.db, id)
 }
 
+func (s *SQLiteStore) SaveImage(ctx context.Context, image application.ImageObject) error {
+	return saveImage(ctx, s.db, image)
+}
+
 func (s *SQLiteStore) ListVolumes(ctx context.Context) ([]domain.DigitizationVolume, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM volumes ORDER BY updated_at DESC, id`)
 	if err != nil {

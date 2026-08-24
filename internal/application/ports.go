@@ -35,6 +35,7 @@ type Transaction interface {
 
 type Store interface {
 	Execute(ctx context.Context, idempotencyKey, operation, requestFingerprint string, fn func(Transaction) (json.RawMessage, error)) (json.RawMessage, bool, error)
+	SaveImage(ctx context.Context, image ImageObject) error
 	GetVolume(ctx context.Context, id string) (*domain.DigitizationVolume, error)
 	ListVolumes(ctx context.Context) ([]domain.DigitizationVolume, error)
 	ListAudit(ctx context.Context, volumeID string) ([]AuditEvent, error)

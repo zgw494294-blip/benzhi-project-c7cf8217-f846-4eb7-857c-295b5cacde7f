@@ -57,6 +57,9 @@ func (s *Service) RegisterPage(ctx context.Context, key, volumeID string, comman
 	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 30000 || config.Height > 30000 {
 		return nil, false, domain.NewRuleError(domain.CodeInvalid, "图像格式无效或尺寸越界")
 	}
+	if err := s.store.SaveImage(ctx, ImageObject{Key: sha, MediaType: media, Data: command.Data, SHA256: sha}); err != nil {
+		return nil, false, err
+	}
 	return runCommand(ctx, s, key, "page.register", volumeID, command, func(tx Transaction) (*domain.DigitizationVolume, error) {
 		volume, err := tx.GetVolume(ctx, volumeID)
 		if err != nil {
@@ -73,9 +76,6 @@ func (s *Service) RegisterPage(ctx context.Context, key, volumeID string, comman
 			ID: pageID, VolumeID: volume.ID, FolioLabel: strings.TrimSpace(command.FolioLabel), Sequence: len(volume.Pages) + 1,
 			ImageObjectKey: sha, MediaType: media, ByteSize: int64(len(command.Data)), SHA256: sha,
 			Width: config.Width, Height: config.Height, Revision: 0,
-		}
-		if err := tx.SaveImage(ctx, ImageObject{Key: sha, MediaType: media, Data: command.Data, SHA256: sha}); err != nil {
-			return nil, err
 		}
 		volume.Pages = append(volume.Pages, page)
 		volume.PageOrder = append(volume.PageOrder, page.ID)

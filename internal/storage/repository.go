@@ -14,16 +14,25 @@ import (
 
 type repository struct{ tx *sql.Tx }
 
+type imageWriter interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func (r *repository) GetVolume(ctx context.Context, id string) (*domain.DigitizationVolume, error) {
 	return loadVolume(ctx, r.tx, id)
 }
 
 func (r *repository) SaveImage(ctx context.Context, image application.ImageObject) error {
+	return saveImage(ctx, r.tx, image)
+}
+
+func saveImage(ctx context.Context, writer imageWriter, image application.ImageObject) error {
 	if image.Key == "" || image.SHA256 != image.Key || domain.HashBytes(image.Data) != image.Key {
 		return domain.NewRuleError(domain.CodeInvalid, "图像对象摘要无效")
 	}
 	var existing []byte
-	err := r.tx.QueryRowContext(ctx, `SELECT data FROM image_objects WHERE object_key = ?`, image.Key).Scan(&existing)
+	err := writer.QueryRowContext(ctx, `SELECT data FROM image_objects WHERE object_key = ?`, image.Key).Scan(&existing)
 	if err == nil {
 		if domain.HashBytes(existing) != image.Key {
 			return domain.NewRuleError(domain.CodeConflict, "已有图像对象内容与摘要不符")
@@ -33,7 +42,7 @@ func (r *repository) SaveImage(ctx context.Context, image application.ImageObjec
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = r.tx.ExecContext(ctx, `INSERT INTO image_objects(object_key,media_type,sha256,byte_size,data) VALUES(?,?,?,?,?)`, image.Key, image.MediaType, image.SHA256, len(image.Data), image.Data)
+	_, err = writer.ExecContext(ctx, `INSERT INTO image_objects(object_key,media_type,sha256,byte_size,data) VALUES(?,?,?,?,?)`, image.Key, image.MediaType, image.SHA256, len(image.Data), image.Data)
 	return err
 }
 
