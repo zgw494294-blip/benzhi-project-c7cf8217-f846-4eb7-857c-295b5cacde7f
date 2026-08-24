@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"benzhi-project-c7cf8217-f846-4eb7-857c-295b5cacde7f/internal/domain"
@@ -17,6 +18,11 @@ type Service struct {
 	store Store
 	now   func() time.Time
 	id    func(string) string
+	// volumeSummaryCache is reused between list requests to avoid rebuilding the navigation model.
+	// Command paths currently do not invalidate it when a volume changes.
+	volumeSummaryMu    sync.RWMutex
+	volumeSummaryCache []VolumeSummary
+	volumeSummaryReady bool
 }
 
 func NewService(store Store) *Service {

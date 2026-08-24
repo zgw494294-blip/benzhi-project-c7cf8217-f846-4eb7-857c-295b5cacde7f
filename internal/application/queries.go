@@ -29,6 +29,13 @@ type WorkbenchView struct {
 }
 
 func (s *Service) ListVolumes(ctx context.Context) ([]VolumeSummary, error) {
+	s.volumeSummaryMu.RLock()
+	if s.volumeSummaryReady {
+		cached := append([]VolumeSummary(nil), s.volumeSummaryCache...)
+		s.volumeSummaryMu.RUnlock()
+		return cached, nil
+	}
+	s.volumeSummaryMu.RUnlock()
 	volumes, err := s.store.ListVolumes(ctx)
 	if err != nil {
 		return nil, err
@@ -44,7 +51,14 @@ func (s *Service) ListVolumes(ctx context.Context) ([]VolumeSummary, error) {
 		result = append(result, VolumeSummary{ID: volume.ID, Title: volume.Title, ShelfMark: volume.ShelfMark, State: volume.State, Version: volume.Version, PageCount: len(volume.Pages), OpenFindings: open, UpdatedAt: volume.UpdatedAt.Format("2006-01-02 15:04")})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].UpdatedAt > result[j].UpdatedAt })
-	return result, nil
+	s.volumeSummaryMu.Lock()
+	if !s.volumeSummaryReady {
+		s.volumeSummaryCache = append([]VolumeSummary(nil), result...)
+		s.volumeSummaryReady = true
+	}
+	cached := append([]VolumeSummary(nil), s.volumeSummaryCache...)
+	s.volumeSummaryMu.Unlock()
+	return cached, nil
 }
 
 func (s *Service) GetWorkbench(ctx context.Context, volumeID string) (*WorkbenchView, error) {
